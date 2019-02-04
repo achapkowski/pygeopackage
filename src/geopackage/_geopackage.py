@@ -75,9 +75,19 @@ class GeoPackage(object):
                       "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON"]:
             sqlite3.register_converter(g, _handle_wkb)
     #----------------------------------------------------------------------
+    def __len__(self):
+        """returns the number of registered tables"""
+        try:
+            sql = """SELECT count(*) FROM gpkg_contents"""
+            cur = self._con.execute(sql)
+            return cur.fetchone()[0]
+        except:
+            return 0
+    #----------------------------------------------------------------------
     def __enter__(self):
         if self._con is None:
             self._con = sqlite3.connect(self._path)
+        return self
     #----------------------------------------------------------------------
     def __exit__(self, type, value, traceback):
         self._con.commit()

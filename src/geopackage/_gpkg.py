@@ -96,7 +96,8 @@ def _create_gpkg(name, path=None, overwrite=False):
     """
     if path is None:
         path = tempfile.gettempdir()
-    elif os.path.isdir(path) == False:
+    elif os.path.isdir(path) == False and \
+         len(path) > 0:
         os.makedirs(path, exist_ok=True)
     if name.endswith(".gpkg") == False:
         name += ".gpkg"
