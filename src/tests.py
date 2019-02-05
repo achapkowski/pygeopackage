@@ -129,12 +129,88 @@ class TestTableClass(unittest.TestCase):
     """
     Tests the geopackage table/spatial table level operations
     """
-    #todo: clean up and add the tests
-    pass
+    # ---------------------------------------------------------------------
+    def test_add_field(self):
+        """tests adding a field on a table"""
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="TheSurfaris")
+            tbl.add_field(name="WipeOut", data_type="TEXT")
+            assert "WipeOut" in tbl.fields.keys()
+        os.remove('sample1960s.gpkg')
+    # ---------------------------------------------------------------------
+    def test_remove_field(self):
+        """tests dropping a field on a table"""
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="Greenbaum")
+            tbl.add_field(name="SpiritInTheSky", data_type="TEXT")
+            assert "SpiritInTheSky" in tbl.fields.keys()
+            tbl.delete_field(name='SpiritInTheSky')
+            assert not "SpiritInTheSky" in tbl.fields.keys()
+        os.remove('sample1960s.gpkg')
+    # ---------------------------------------------------------------------
+    def test_property_attribute_table(self):
+        """tests the dtype property on an attribute table"""
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="NapoleonXIV")
+            assert tbl.dtype == 'attribute'
+        os.remove('sample1960s.gpkg')
+    # ---------------------------------------------------------------------
+    def test_property_spatial_table(self):
+        """tests the dtype property on an attribute table"""
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="NapoleonXIV", wkid=4326, geometry_type="point")
+            assert tbl.dtype == "spatial"
+            assert tbl.wkid == 4326
+            assert tbl.geometry_type.lower() == "point"
+        os.remove('sample1960s.gpkg')
+    # ---------------------------------------------------------------------
+    def test_rows_table(self):
+        """tests the dtype property on an attribute table"""
+        data = [
+            {'song' : "Midnight Mary", 'artist' : "Joey Powers"},
+            {'song' : "What Kind of Fool", 'artist' : "The Murmaids"},
+            {'song' : "Hippy Hippy Shake", 'artist' : "The Swinging Blue Jeans"}
+        ]
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="OneHitWonders", fields={
+                "song" : "TEXT",
+                "artist" : "TEXT"
+            })
+            tbl.insert(row=data[0])
+            tbl.insert(row=data[1])
+            tbl.insert(row=data[2])
+            assert len([row for row in tbl.rows()]) == 3
+            assert len([row for row in tbl.rows(where="""song = 'Midnight Mary'""")]) == 1
+            row = [row for row in tbl.rows(where="""song = 'Midnight Mary'""", fields=['artist'])][0]
+            assert row.keys() == ['artist', 'OBJECTID']
+            assert row.values() == row.values() == ['Joey Powers', 1]
+        os.remove('sample1960s.gpkg')
 class TestRowClass(unittest.TestCase):
     """
     Tests the row object
     """
-    #todo: clean up and add the tests
-    pass
+    # ---------------------------------------------------------------------
+    def test_rows_table(self):
+        """tests the dtype property on an attribute table"""
+        data = [
+            {'song' : "Midnight Mary", 'artist' : "Joey Powers"},
+            {'song' : "What Kind of Fool", 'artist' : "The Murmaids"},
+            {'song' : "Hippy Hippy Shake", 'artist' : "The Swinging Blue Jeans"}
+        ]
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="OneHitWonders", fields={
+                "song" : "TEXT",
+                "artist" : "TEXT"
+            })
+            tbl.insert(row=data[0])
+            tbl.insert(row=data[1])
+            tbl.insert(row=data[2])
+            assert len([row for row in tbl.rows()]) == 3
+            assert len([row for row in tbl.rows(where="""song = 'Midnight Mary'""")]) == 1
+            row = [row for row in tbl.rows(where="""song = 'Midnight Mary'""", fields=['artist'])][0]
+            assert row.keys() == ['artist', 'OBJECTID']
+            assert row.values() == row.values() == ['Joey Powers', 1]
+        os.remove('sample1960s.gpkg')
 
+if __name__ == "__main__":
+    TestTableClass().test_rows_table()

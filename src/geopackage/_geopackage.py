@@ -254,10 +254,14 @@ class _Row(MutableMapping, OrderedDict):
     def __str__(self):
         return "<Row OBJECTID=%s>" % self['OBJECTID']
     #----------------------------------------------------------------------
+    def __repr__(self):
+        return self.__str__()
+    #----------------------------------------------------------------------
     def __setattr__(self, name, value):
         if name in {'_values','_dict', '_table_name', '_con', '_keys'}:
             super().__setattr__(name, value)
-        elif name.lower() != 'objectid':
+        elif name.lower() != 'objectid' and \
+             name in self.keys():
             self._values[name] = value
             self._update()
     #----------------------------------------------------------------------
@@ -275,6 +279,15 @@ class _Row(MutableMapping, OrderedDict):
     def keys(self):
         """returns the column names in the dataset"""
         return list(self._values.keys())
+    #----------------------------------------------------------------------
+    @property
+    def fields(self):
+        """returns the field names in the dataset"""
+        return self.keys()
+    #----------------------------------------------------------------------
+    def as_dict(self):
+        """returns the row as a dictionary"""
+        return dict(zip(self.fields, self.values()))
     #----------------------------------------------------------------------
     def values(self):
         """returns the row values"""
@@ -341,6 +354,7 @@ class Table(object):
         self._con = con
         self._table_name = table
     #----------------------------------------------------------------------
+    @property
     def dtype(self):
         """returns the table type"""
         return "attribute"
@@ -465,6 +479,8 @@ class Table(object):
         :returns: _Row object
         """
         if isinstance(fields, (list, tuple)):
+            if "OBJECTID" not in fields:
+                fields.append("OBJECTID")
             fields = ",".join(fields)
         if where is None:
             query = """SELECT {fields} from {tbl} """.format(tbl=self._table_name,
