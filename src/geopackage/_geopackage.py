@@ -245,11 +245,12 @@ class _Row(MutableMapping, OrderedDict):
     _dict = None
     _keys = None
     #----------------------------------------------------------------------
-    def __init__(self, values, table_name=None, con=None):
+    def __init__(self, values, table_name=None, con=None, header=None):
         """Constructor"""
         self._table_name = table_name
         self._con = con
         self._values = values
+        self._header = header
     #----------------------------------------------------------------------
     def __str__(self):
         return "<Row OBJECTID=%s>" % self['OBJECTID']
@@ -258,12 +259,20 @@ class _Row(MutableMapping, OrderedDict):
         return self.__str__()
     #----------------------------------------------------------------------
     def __setattr__(self, name, value):
-        if name in {'_values','_dict', '_table_name', '_con', '_keys'}:
+        if name in {'_values','_dict', '_table_name', '_con', '_keys', '_header'}:
             super().__setattr__(name, value)
+        elif name.lower() == 'shape':
+            self._values[name] = value
+            self._update()
         elif name.lower() != 'objectid' and \
              name in self.keys():
             self._values[name] = value
             self._update()
+
+        elif name.lower() == 'objectid':
+            raise ValueError("OBJECTID values cannot be updated.")
+        else:
+            raise ValueError("The field: {field} does not exist.".format(field=name))
     #----------------------------------------------------------------------
     def __getattr__(self, name):
         if name in self._values:
@@ -287,7 +296,7 @@ class _Row(MutableMapping, OrderedDict):
     #----------------------------------------------------------------------
     def as_dict(self):
         """returns the row as a dictionary"""
-        return dict(zip(self.fields, self.values()))
+        return ddict(zip(self.keys(), self.values()))
     #----------------------------------------------------------------------
     def values(self):
         """returns the row values"""
@@ -298,11 +307,31 @@ class _Row(MutableMapping, OrderedDict):
         txts = []
         values = []
         for k,v in self._values.items():
-            if k.lower() != "objectid":
+            if k.lower() != "objectid" and \
+               k.lower() != 'shape':
                 txts.append("%s=?" % k)
                 values.append(v)
             elif k.lower() == 'shape':
-                pass
+                if isinstance(v, dict) and "coordinates" not in v:
+                    v = self._header + dumps(v, False)
+                elif isinstance(v, dict) and "coordinates" in v:
+                    v = self._gpheader + geometwkb.dumps(obj=v)
+                elif isinstance(v, str):
+                    gj = geometwkt.loads(v)
+                    v = self._gpheader + geometwkb.dumps(obj=gj)
+                elif isinstance(v, (bytes, bytearray)):
+                    if isinstance(v, (bytearray)):
+                        v = bytes(v)
+                    if len(v) > 2 and \
+                       v[:2] != b'GB':
+                        v = self._gpheader + v
+                elif v is None:
+                    v = self._gpheader + b'0x000000000000f87f'
+                else:
+                    raise ValueError(("Shape column must be Esri JSON dictionary, "
+                                      "WKT, GeoJSON dictionary, or WKB (bytes)"))
+                txts.append("%s=?" % k)
+                values.append(v)
         sql = '''UPDATE {table} SET {values} WHERE OBJECTID={oid}'''.format(
             table=self._table_name,
             values=",".join(txts),
@@ -604,6 +633,41 @@ class SpatialTable(Table):
         if self._wkid is None:
             self._refresh()
         return self._wkid
+    #----------------------------------------------------------------------
+    def rows(self, where=None, fields="*"):
+        """
+        Search/update cursor like iterator
+
+        ===============     ===============================================
+        **Arguements**      **Description**
+        ---------------     -----------------------------------------------
+        where               Optional String. Optional Sql where clause.
+        ---------------     -----------------------------------------------
+        fields              Optional List. The default is all fields (*).
+                            A list of fields can be provided to limit the
+                            data that is returned.
+        ===============     ===============================================
+
+        :returns: _Row object
+        """
+        if isinstance(fields, (list, tuple)):
+            if "OBJECTID" not in fields:
+                fields.append("OBJECTID")
+            fields = ",".join(fields)
+        if where is None:
+            query = """SELECT {fields} from {tbl} """.format(tbl=self._table_name,
+                                                             fields=fields)
+        else:
+            query = """SELECT {fields} from {tbl} WHERE {where}""".format(tbl=self._table_name,
+                                                                          fields=fields,
+                                                                          where=where)
+        cursor = self._con.cursor()
+        c = cursor.execute(query)
+        columns = [d[0] for d in c.description]
+        for row in c:
+            yield _Row(values=dict(zip(columns, row)),
+                       table_name=self._table_name,
+                       con=self._con, header=self._gpheader)
     #----------------------------------------------------------------------
     def _flag_to_bytes(self, code):
         """converts single integer to bytes"""

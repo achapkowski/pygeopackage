@@ -8,7 +8,65 @@ import pytest
 
 import geopackage
 from geopackage import GeoPackage
+from geopackage._geopackage import _Row, SpatialTable, Table
+_requires_dependency_cache = {}
 
+try:
+    import arcpy
+    HASARCPY = True
+except ImportError:
+    HASARCPY = False
+try:
+    import shapely
+    HASSHAPELY = True
+except:
+    HASSHAPELY = False
+
+
+point = {"x" : -118.15, "y" : 33.80, "spatialReference" : {"wkid" : 4326}}
+multipoint = { "points" : [[-97.06138,32.837],[-97.06133,32.836],[-97.06124,32.834],[-97.06127,32.832]], "spatialReference" : {"wkid" : 4326} }
+polyline = {
+  "paths" : [[[-97.06138,32.837],[-97.06133,32.836],[-97.06124,32.834],[-97.06127,32.832]],
+             [[-97.06326,32.759],[-97.06298,32.755]]],
+  "spatialReference" : {"wkid" : 4326}
+}
+polygon = {
+  "rings" : [[[-97.06138,32.837],[-97.06133,32.836],[-97.06124,32.834],[-97.06127,32.832],
+              [-97.06138,32.837]],[[-97.06326,32.759],[-97.06298,32.755],[-97.06153,32.749],
+              [-97.06326,32.759]]],
+  "spatialReference" : {"wkid" : 4326}
+}
+
+
+
+def requires_dependency(name):
+    """Decorator to declare required dependencies for tests.
+
+    Examples
+    --------
+
+    ::
+
+        from gammapy.utils.testing import requires_dependency
+
+        @requires_dependency('scipy')
+        def test_using_scipy():
+            import scipy
+            ...
+    """
+    if name in _requires_dependency_cache:
+        skip_it = _requires_dependency_cache[name]
+    else:
+        try:
+            __import__(name)
+            skip_it = False
+        except ImportError:
+            skip_it = True
+
+        _requires_dependency_cache[name] = skip_it
+
+    reason = 'Missing dependency: {}'.format(name)
+    return pytest.mark.skipif(skip_it, reason=reason)
 
 class TestGeoPackageClass(unittest.TestCase):
     """
@@ -185,6 +243,61 @@ class TestTableClass(unittest.TestCase):
             assert row.keys() == ['artist', 'OBJECTID']
             assert row.values() == row.values() == ['Joey Powers', 1]
         os.remove('sample1960s.gpkg')
+    # ---------------------------------------------------------------------
+    def test_rows_spatial_table(self):
+        """tests the spatial insert on an attribute table"""
+        import copy
+        from geopackage._wkb import dumps, loads, load, dump
+        data = [
+            {'song' : "Midnight Mary", 'artist' : "Joey Powers", "SHAPE" : point},
+            {'song' : "What Kind of Fool", 'artist' : "The Murmaids", "SHAPE": dumps(obj=point, big_endian=False)}
+        ]
+
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="OneHitWonders",
+                              fields={
+                                  "song" : "TEXT",
+                                  "artist" : "TEXT"
+                                  },
+                              geometry_type='point',
+                              wkid=4326)
+            tbl.insert(row=data[0])
+            tbl.insert(row=data[1])
+            assert len([row for row in tbl.rows()]) == 2
+        os.remove('sample1960s.gpkg')
+########################################################################
+class TestWKBGeometry(unittest.TestCase):
+    """Tests the Geometry Ops"""
+    @requires_dependency(name='arcpy')
+    def test_wkb_arcpy(self):
+        from geopackage._wkb import dumps, loads, load, dump
+
+        import arcpy
+        sr = arcpy.SpatialReference(4326)
+        wkbs = [dumps(obj=point, big_endian=False),
+                dumps(polyline, big_endian=False),
+                dumps(multipoint, big_endian=False),
+                dumps(polygon, big_endian=False)]
+        for wkb in wkbs:
+            assert arcpy.FromWKB(bytearray(wkb), sr)
+    #----------------------------------------------------------------------
+    @requires_dependency(name='arcpy')
+    def test_wkb_arcpy(self):
+        from geopackage._wkb import dumps, loads, load, dump
+
+        import arcpy
+        sr = arcpy.SpatialReference(4326)
+        wkbs = [dumps(obj=point, big_endian=False),
+                dumps(polyline, big_endian=False),
+                dumps(multipoint, big_endian=False),
+                dumps(polygon, big_endian=False)]
+        for wkb in wkbs:
+            assert arcpy.FromWKB(bytearray(wkb), sr)
+
+
+
+
+########################################################################
 class TestRowClass(unittest.TestCase):
     """
     Tests the row object
@@ -211,6 +324,34 @@ class TestRowClass(unittest.TestCase):
             assert row.keys() == ['artist', 'OBJECTID']
             assert row.values() == row.values() == ['Joey Powers', 1]
         os.remove('sample1960s.gpkg')
+    # ---------------------------------------------------------------------
+    def test_rows_update_geom_spatial_table(self):
+        """tests the spatial insert on an attribute table"""
+        import copy
+        from geopackage._wkb import dumps, loads, load, dump
+        data = [
+            {'song' : "Midnight Mary", 'artist' : "Joey Powers", "Shape" : point},
+            {'song' : "What Kind of Fool", 'artist' : "The Murmaids", "Shape": dumps(obj=point, big_endian=False)}
+        ]
+        npoint = copy.deepcopy(point)
+        npoint['x'] = -1
+        npoint['y'] = -2
 
-if __name__ == "__main__":
-    TestTableClass().test_rows_table()
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="OneHitWonders",
+                              fields={
+                                  "song" : "TEXT",
+                                  "artist" : "TEXT"
+                                  },
+                              geometry_type='point',
+                              wkid=4326)
+            tbl.insert(row=data[0])
+            #tbl.insert(row=data[1])
+            #assert len([row for row in tbl.rows()]) == 2
+
+            for row in tbl.rows():
+                isinstance(row, _Row)
+
+                row['Shape'] = npoint
+                break
+        os.remove('sample1960s.gpkg')
