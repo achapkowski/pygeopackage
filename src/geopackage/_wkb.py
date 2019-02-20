@@ -4,7 +4,6 @@ It has been modified under the Apache 2.0 license to fit the needs of the
 Esri JSON specificaction as defined here: https://developers.arcgis.com/documentation/common-data-types/geometry-objects.htm
 """
 import binascii
-import six
 import struct
 
 from ._utils import block_splitter
@@ -125,8 +124,8 @@ def _get_geom_type(type_bytes):
     """
     # slice off the high byte, which may contain the SRID flag
     high_byte = type_bytes[0]
-    if six.PY3:
-        high_byte = bytes([high_byte])
+
+    high_byte = bytes([high_byte])
     has_srid = high_byte == b'\x20'
     if has_srid:
         # replace the high byte with a null byte
@@ -154,7 +153,7 @@ def dump(obj, dest_file):
 
 def load(source_file, wkid=4326):
     """
-    Load a GeoJSON `dict` object from a ``source_file`` containing WKB (as a
+    Load a EsriJSON `dict` object from a ``source_file`` containing WKB (as a
     byte string).
 
     :param source_file:
@@ -166,55 +165,15 @@ def load(source_file, wkid=4326):
     return loads(source_file.read(), wkid=wkid)
 
 
-def dumps(obj, big_endian=True):
+def dumps(obj, big_endian=False):
     """
-    Dump a GeoJSON-like `dict` to a WKB string.
-
-    .. note::
-        The dimensions of the generated WKB will be inferred from the first
-        vertex in the GeoJSON `coordinates`. It will be assumed that all
-        vertices are uniform. There are 4 types:
-
-        - 2D (X, Y): 2-dimensional geometry
-        - Z (X, Y, Z): 3-dimensional geometry
-        - M (X, Y, M): 2-dimensional geometry with a "Measure"
-        - ZM (X, Y, Z, M): 3-dimensional geometry with a "Measure"
-
-        If the first vertex contains 2 values, we assume a 2D geometry.
-        If the first vertex contains 3 values, this is slightly ambiguous and
-        so the most common case is chosen: Z.
-        If the first vertex contains 4 values, we assume a ZM geometry.
-
-        The WKT/WKB standards provide a way of differentiating normal (2D), Z,
-        M, and ZM geometries (http://en.wikipedia.org/wiki/Well-known_text),
-        but the GeoJSON spec does not. Therefore, for the sake of interface
-        simplicity, we assume that geometry that looks 3D contains XYZ
-        components, instead of XYM.
-
-        If the coordinates list has no coordinate values (this includes nested
-        lists, for example, `[[[[],[]], []]]`, the geometry is considered to be
-        empty. Geometries, with the exception of points, have a reasonable
-        "empty" representation in WKB; however, without knowing the number of
-        coordinate values per vertex, the type is ambigious, and thus we don't
-        know if the geometry type is 2D, Z, M, or ZM. Therefore in this case
-        we expect a `ValueError` to be raised.
+    Dump a EsriJSON-like `dict` to a WKB string.
 
     :param dict obj:
         GeoJson-like `dict` object.
     :param bool big_endian:
-        Defaults to `True`. If `True`, data values in the generated WKB will
+        Defaults to `False`. If `True`, data values in the generated WKB will
         be represented using big endian byte order. Else, little endian.
-
-    TODO: remove this
-
-    :param str dims:
-        Indicates to WKB representation desired from converting the given
-        GeoJSON `dict` ``obj``. The accepted values are:
-
-        * '2D': 2-dimensional geometry (X, Y)
-        * 'Z': 3-dimensional geometry (X, Y, Z)
-        * 'M': 3-dimensional geometry (X, Y, M)
-        * 'ZM': 4-dimensional geometry (X, Y, Z, M)
 
     :returns:
         A WKB binary string representing of the ``obj``.
@@ -242,46 +201,16 @@ def dumps(obj, big_endian=True):
 
 def loads(string, wkid=4326):
     """
-    Construct a GeoJSON `dict` from WKB (`string`).
+    Construct a EsriJSON `dict` from WKB (`string`).
 
-    The resulting GeoJSON `dict` will include the SRID as an integer in the
-    `meta` object. This was an arbitrary decision made by `geomet, the
-    discussion of which took place here:
-    https://github.com/geomet/geomet/issues/28.
 
-    In order to be consistent with other libraries [1] and (deprecated)
-    specifications [2], also include the same information in a `crs`
-    object. This isn't ideal, but the `crs` member is no longer part of
-    the GeoJSON standard, according to RFC7946 [3]. However, it's still
-    useful to include this information in GeoJSON payloads because it
-    supports conversion to EWKT/EWKB (which are canonical formats used by
-    PostGIS and the like).
+    :param str string:
+        WKB string.
+    :param int wkid:
+        The srid of the coordinate system. The default is 4326.
 
-    Example:
-
-        {'type': 'Point',
-         'coordinates': [0.0, 1.0],
-         'meta': {'srid': 4326},
-         'crs': {'type': 'name', 'properties': {'name': 'EPSG4326'}}}
-
-    NOTE(larsbutler): I'm not sure if it's valid to just prefix EPSG
-    (European Petroluem Survey Group) to an SRID like this, but we'll
-    stick with it for now until it becomes a problem.
-
-    NOTE(larsbutler): Ideally, we should use URNs instead of this
-    notation, according to the new GeoJSON spec [4]. However, in
-    order to be consistent with [1], we'll stick with this approach
-    for now.
-
-    References:
-
-    [1] - https://github.com/bryanjos/geo/issues/76
-    [2] - http://geojson.org/geojson-spec.html#coordinate-reference-system-objects
-    [3] - https://tools.ietf.org/html/rfc7946#appendix-B.1
-    [4] - https://tools.ietf.org/html/rfc7946#section-4
-    """  # noqa
+    """
     string = iter(string)
-    # endianness = string[0:1]
     endianness = as_bin_str(take(1, string))
     if endianness == BIG_ENDIAN:
         big_endian = True
@@ -315,7 +244,7 @@ def loads(string, wkid=4326):
     data_bytes = iter(data_bytes)
     result = importer(big_endian, type_bytes, data_bytes, wkid)
     if has_srid:
-        # As mentioned in the docstring above, include both approaches to
+        # As mentioned in the docstring above, includeEsriJSONpproaches to
         # indicating the SRID.
         result['meta'] = {'srid': int(srid)}
         result['crs'] = {
@@ -372,10 +301,10 @@ def _header_bytefmt_byteorder(geom_type, num_dims, big_endian, meta=None):
 
 def _dump_point(obj, big_endian, meta):
     """
-    Dump a GeoJSON-like `dict` to a point WKB string.
+    Dump a EsriJSON-like `dict` to a point WKB string.
 
     :param dict obj:
-        GeoJson-like `dict` object.
+        EsriJSON-like `dict` object.
     :param bool big_endian:
         If `True`, data values in the generated WKB will be represented using
         big endian byte order. Else, little endian.
@@ -588,7 +517,7 @@ def _dump_geometrycollection(obj, big_endian, meta):
 
 def _load_point_esri(big_endian, type_bytes, data_bytes, wkid):
     """
-    Convert byte data for a Point to a GeoJSON `dict`.
+    Convert byte data for a Point to a EsriJSON `dict`.
 
     :param bool big_endian:
         If `True`, interpret the ``data_bytes`` in big endian order, else
@@ -602,7 +531,7 @@ def _load_point_esri(big_endian, type_bytes, data_bytes, wkid):
         Coordinate data in a binary string.
 
     :returns:
-        GeoJSON `dict` representing the Point geometry.
+        EsriJSON `dict` representing the Point geometry.
     """
     endian_token = '>' if big_endian else '<'
 
@@ -628,6 +557,7 @@ def _load_point_esri(big_endian, type_bytes, data_bytes, wkid):
 
 
 def _load_linestring_esri(big_endian, type_bytes, data_bytes, wkid):
+    """converts wkb to esri json"""
     endian_token = '>' if big_endian else '<'
 
     is_m = False
@@ -662,6 +592,7 @@ def _load_linestring_esri(big_endian, type_bytes, data_bytes, wkid):
 
 
 def _load_polygon_esri(big_endian, type_bytes, data_bytes, wkid):
+    """converts wkb to esri json"""
     endian_token = '>' if big_endian else '<'
     data_bytes = iter(data_bytes)
 
@@ -688,10 +619,8 @@ def _load_polygon_esri(big_endian, type_bytes, data_bytes, wkid):
 
         verts_wkb = as_bin_str(take(8 * num_verts * num_dims, data_bytes))
         verts = block_splitter(verts_wkb, 8)
-        if six.PY2:
-            verts = (b''.join(x) for x in verts)
-        elif six.PY3:
-            verts = (b''.join(bytes([y]) for y in x) for x in verts)
+
+        verts = (b''.join(bytes([y]) for y in x) for x in verts)
         for vert_wkb in block_splitter(verts, num_dims):
             values = [struct.unpack('%sd' % endian_token, x)[0]
                       for x in vert_wkb]
@@ -706,6 +635,7 @@ def _load_polygon_esri(big_endian, type_bytes, data_bytes, wkid):
 
 
 def _load_multipoint_esri(big_endian, type_bytes, data_bytes, wkid):
+    """converts wkb to esri json"""
     endian_token = '>' if big_endian else '<'
     data_bytes = iter(data_bytes)
 
@@ -754,6 +684,7 @@ def _load_multipoint_esri(big_endian, type_bytes, data_bytes, wkid):
 
 
 def _load_multilinestring_esri(big_endian, type_bytes, data_bytes, wkid):
+    """converts wkb to esri json"""
     endian_token = '>' if big_endian else '<'
     data_bytes = iter(data_bytes)
 
@@ -806,6 +737,7 @@ def _load_multilinestring_esri(big_endian, type_bytes, data_bytes, wkid):
 
 
 def _load_multipolygon_esri(big_endian, type_bytes, data_bytes, wkid):
+    """converts wkb to esri json"""
     endian_token = '>' if big_endian else '<'
 
     is_m = False

@@ -296,7 +296,7 @@ class _Row(MutableMapping, OrderedDict):
     #----------------------------------------------------------------------
     def as_dict(self):
         """returns the row as a dictionary"""
-        return ddict(zip(self.keys(), self.values()))
+        return dict(zip(self.keys(), self.values()))
     #----------------------------------------------------------------------
     def values(self):
         """returns the row values"""
@@ -480,13 +480,13 @@ class Table(object):
 
         :returns: boolean
         """
-        fields = ",".join([fld[1] for fld in self.fields if fld[1].lower() != name.lower()])
+        fields = ",".join([fld for fld in self.fields if fld.lower() != name.lower()])
         sql = """
         CREATE TABLE temp_bkup AS SELECT {fields} FROM {table};
         DROP TABLE {table};
         ALTER TABLE temp_bkup RENAME TO {table};
         """.format(table=self._table_name, fields=fields)
-        self._con.execute(sql)
+        self._con.executescript(sql)
         self._con.commit()
         self._fields = None
         return True
@@ -560,14 +560,67 @@ class Table(object):
         self._con.commit()
         return True
     #----------------------------------------------------------------------
-    def _to_pandas(self, fields):
-        """"""
-        raise NotImplementedError("Not Implemented Yet")
-    #----------------------------------------------------------------------
-    @classmethod
-    def _from_pandas(self):
-        """"""
-        raise NotImplementedError("Not Implemented Yet")
+    def to_pandas(self, where=None, fields="*", ftype=None):
+        """
+        Exports a table to a Pandas' DataFrame.
+
+        ===============     ===============================================
+        **Arguements**      **Description**
+        ---------------     -----------------------------------------------
+        where               Optional String. Optional Sql where clause.
+        ---------------     -----------------------------------------------
+        fields              Optional List. The default is all fields (*).
+                            A list of fields can be provided to limit the
+                            data that is returned.
+        ---------------     -----------------------------------------------
+        ftype               Optional String. This value can be dataframe
+                            format type.  The value can be None or esri.
+
+                                + None - means the dataframe will be a raw view of the table.
+                                + esri - means the dataframe will be a spatially enable dataframe. (Requires Python API for ArcGIS)
+
+        ===============     ===============================================
+
+        :returns: pd.DataFrame
+
+        """
+        import pandas as pd
+        if isinstance(fields, (list, tuple)):
+            if "OBJECTID" not in fields:
+                fields.append("OBJECTID")
+            fields = ",".join(fields)
+        if where is None:
+            query = """SELECT {fields} from {tbl} """.format(tbl=self._table_name,
+                                                             fields=fields)
+        else:
+            query = """SELECT {fields} from {tbl} WHERE {where}""".format(tbl=self._table_name,
+                                                                          fields=fields,
+                                                                          where=where)
+        if ftype is None:
+            return pd.read_sql_query(query,
+                                     self._con)
+        elif str(ftype).lower() == 'esri':
+            try:
+                from arcgis.geometry import Geometry
+                from arcgis.features import GeoAccessor, GeoSeriesAccessor
+                df = pd.read_sql_query(query,
+                                       self._con)
+                fields = list(self.fields.keys())
+                lower_fields = [str(fld).lower() for fld in fields]
+                if "shape" in lower_fields:
+                    idx = lower_fields.index("shape")
+                    SHAPE = fields[idx]
+                    df[SHAPE] = df[SHAPE].apply(lambda x: Geometry(x[8:]))
+                    df.spatial.set_geometry(SHAPE)
+                    try:
+                        df.spatial.project(self.wkid)
+                    except:
+                        print('nope')
+                return df
+            except ImportError:
+                raise Exception("The Python API for ArcGIS is required to import using ftype `esri`")
+            except Exception as e:
+                raise Exception(e)
 ########################################################################
 class SpatialTable(Table):
     """

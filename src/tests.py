@@ -265,6 +265,32 @@ class TestTableClass(unittest.TestCase):
             tbl.insert(row=data[1])
             assert len([row for row in tbl.rows()]) == 2
         os.remove('sample1960s.gpkg')
+    #----------------------------------------------------------------------
+    @requires_dependency(name='arcgis')
+    def test_to_df(self):
+        """Tests converting to a Spatially Enabled DataFrame"""
+        import copy
+        from geopackage._wkb import dumps, loads, load, dump
+        data = [
+            {'song' : "Midnight Mary", 'artist' : "Joey Powers", "SHAPE" : point},
+            {'song' : "What Kind of Fool", 'artist' : "The Murmaids", "SHAPE": dumps(obj=point, big_endian=False)}
+        ]
+
+        with GeoPackage(path="sample1960s.gpkg") as gpkg:
+            tbl = gpkg.create(name="OneHitWonders",
+                              fields={
+                                  "song" : "TEXT",
+                                  "artist" : "TEXT"
+                                  },
+                              geometry_type='point',
+                              wkid=4326)
+            tbl.insert(row=data[0])
+            tbl.insert(row=data[1])
+            df = tbl.to_pandas()
+            assert len(df) == 2
+            df = tbl.to_pandas(ftype='esri')
+            assert df.spatial.name == 'Shape'
+        os.remove('sample1960s.gpkg')
 ########################################################################
 class TestWKBGeometry(unittest.TestCase):
     """Tests the Geometry Ops"""
@@ -280,19 +306,20 @@ class TestWKBGeometry(unittest.TestCase):
                 dumps(polygon, big_endian=False)]
         for wkb in wkbs:
             assert arcpy.FromWKB(bytearray(wkb), sr)
-    #----------------------------------------------------------------------
-    @requires_dependency(name='arcpy')
-    def test_wkb_arcpy(self):
-        from geopackage._wkb import dumps, loads, load, dump
+    ##----------------------------------------------------------------------
+    #@requires_dependency(name='shapely')
+    #def test_wkb_arcpy(self):
+        #from geopackage._wkb import dumps, loads, load, dump
+        #import shapely
 
-        import arcpy
-        sr = arcpy.SpatialReference(4326)
-        wkbs = [dumps(obj=point, big_endian=False),
-                dumps(polyline, big_endian=False),
-                dumps(multipoint, big_endian=False),
-                dumps(polygon, big_endian=False)]
-        for wkb in wkbs:
-            assert arcpy.FromWKB(bytearray(wkb), sr)
+        #import arcpy
+        #sr = arcpy.SpatialReference(4326)
+        #wkbs = [dumps(obj=point, big_endian=False),
+                #dumps(polyline, big_endian=False),
+                #dumps(multipoint, big_endian=False),
+                #dumps(polygon, big_endian=False)]
+        #for wkb in wkbs:
+            #assert arcpy.FromWKB(bytearray(wkb), sr)
 
 
 
@@ -355,3 +382,4 @@ class TestRowClass(unittest.TestCase):
                 row['Shape'] = npoint
                 break
         os.remove('sample1960s.gpkg')
+
