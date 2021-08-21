@@ -12,69 +12,89 @@ try:
     import geomet
     from geomet import wkt as geometwkt
     from geomet import wkb as geometwkb
+
     _HASGEOMET = True
 except ImportError:
     _HASGEOMET = False
 
 from ._gpkg import _create_feature_class, _create_gpkg, _create_table, _insert_values
 from ._wkb import loads, dumps
+
 # ----------------------------------------------------------------------
 def _handle_wkb(wkb):
     """handles the insert convertion for the custom geometry types"""
     if isinstance(wkb, bytes):
         wkb = bytearray(wkb)
     return wkb
+
+
 # ----------------------------------------------------------------------
 def _adapt_wkb(wkb):
     """ensures the wkb values are bytes, not bytearrays"""
     return wkb
+
+
 ########################################################################
 class GeoPackage(object):
     """
     A single instance of a GeoPackage file.
     """
+
     _con = None
     _dir = None
     _path = None
     _db_name = None
 
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     def __init__(self, path, overwrite=False):
         """Constructor"""
 
         self._dir = os.path.dirname(path)
         self._db_name = os.path.basename(path)
 
-        if self._db_name.lower().endswith('.gpkg') == False:
+        if self._db_name.lower().endswith(".gpkg") == False:
             self._db_name += ".gpkg"
         self._path = os.path.join(self._dir, self._db_name)
-        if os.path.isfile(self._path) and \
-           overwrite:
+        if os.path.isfile(self._path) and overwrite:
             os.remove(self._path)
-        self._path = _create_gpkg(name=self._db_name,
-                                  path=self._dir,
-                                  overwrite=overwrite)
-        self._con = sqlite3.connect(self._path,
-                                    detect_types=sqlite3.PARSE_DECLTYPES)
+        self._path = _create_gpkg(
+            name=self._db_name, path=self._dir, overwrite=overwrite
+        )
+        self._con = sqlite3.connect(self._path, detect_types=sqlite3.PARSE_DECLTYPES)
         # register custom dtypes
         sqlite3.register_adapter(bytearray, _adapt_wkb)
-        for g in ["POINT", "LINESTRING", "POLYGON",
-                  "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON"]:
+        for g in [
+            "POINT",
+            "LINESTRING",
+            "POLYGON",
+            "MULTIPOINT",
+            "MULTILINESTRING",
+            "MULTIPOLYGON",
+        ]:
             sqlite3.register_converter(g, _handle_wkb)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def _setup(self):
         """sets up the registration for the GeoPackage"""
         if self._path != ":memory:":
             self._con.close()
             self._con = None
-            self._con = sqlite3.connect(self._path,
-                                        detect_types=sqlite3.PARSE_DECLTYPES)
+            self._con = sqlite3.connect(
+                self._path, detect_types=sqlite3.PARSE_DECLTYPES
+            )
         # register custom dtypes
         sqlite3.register_adapter(bytearray, _adapt_wkb)
-        for g in ["POINT", "LINESTRING", "POLYGON",
-                      "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON"]:
+        for g in [
+            "POINT",
+            "LINESTRING",
+            "POLYGON",
+            "MULTIPOINT",
+            "MULTILINESTRING",
+            "MULTIPOLYGON",
+        ]:
             sqlite3.register_converter(g, _handle_wkb)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __len__(self):
         """returns the number of registered tables"""
         try:
@@ -83,16 +103,19 @@ class GeoPackage(object):
             return cur.fetchone()[0]
         except:
             return 0
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __enter__(self):
         if self._con is None:
             self._con = sqlite3.connect(self._path)
         return self
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __exit__(self, type, value, traceback):
         self._con.commit()
         self._con.close()
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def exists(self, name):
         """
         Returns boolean if the table exists
@@ -106,7 +129,8 @@ class GeoPackage(object):
             if tbl[0].lower() == name.lower():
                 return True
         return False
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def get(self, name):
         """
         Returns a table if it exists in the geopackage.
@@ -124,11 +148,12 @@ class GeoPackage(object):
         sql = "SELECT table_name, data_type FROM gpkg_contents where table_name = ?"
         cur = self._con.execute(sql, [name])
         for tbl in cur:
-            if tbl[1] == 'attributes':
+            if tbl[1] == "attributes":
                 return Table(tbl[0], self._con)
             else:
                 return SpatialTable(tbl[0], self._con)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def tables(self):
         """
@@ -140,11 +165,12 @@ class GeoPackage(object):
         sql = "SELECT table_name, data_type FROM gpkg_contents"
         cur = self._con.execute(sql)
         for tbl in cur:
-            if tbl[1] == 'attributes':
+            if tbl[1] == "attributes":
                 yield Table(tbl[0], self._con)
             else:
                 yield SpatialTable(tbl[0], self._con)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def enable(self):
         """
         enables the sqlite database to be a geopackage
@@ -157,13 +183,9 @@ class GeoPackage(object):
         except:
             return False
         return True
-    #----------------------------------------------------------------------
-    def create(self,
-               name,
-               fields=None,
-               wkid=None,
-               geometry_type=None,
-               overwrite=True):
+
+    # ----------------------------------------------------------------------
+    def create(self, name, fields=None, wkid=None, geometry_type=None, overwrite=True):
         """
         The `create` method generates a new table or feature class in the
         geopackage.
@@ -205,33 +227,39 @@ class GeoPackage(object):
         """
         if overwrite:
             sql_drop = """DROP TABLE IF EXISTS %s""" % name
-            sql_delete_row = """DELETE FROM gpkg_contents where table_name = '{tbl}'""".format(tbl=name)
-            sql_geom_col = """DELETE FROM gpkg_geometry_columns where table_name = '{tbl}'""".format(tbl=name)
+            sql_delete_row = """DELETE FROM gpkg_contents where table_name = '{tbl}'""".format(
+                tbl=name
+            )
+            sql_geom_col = """DELETE FROM gpkg_geometry_columns where table_name = '{tbl}'""".format(
+                tbl=name
+            )
             self._con.execute(sql_drop)
             self._con.execute(sql_delete_row)
             self._con.execute(sql_geom_col)
             self._con.commit()
-        elif self.exists(name) and \
-             overwrite == False:
-            raise ValueError("Table %s exists. Please pick a different table name" % name)
+        elif self.exists(name) and overwrite == False:
+            raise ValueError(
+                "Table %s exists. Please pick a different table name" % name
+            )
         if geometry_type:
-            iftrue = _create_feature_class(con=self._con,
-                                           name=name,
-                                           wkid=wkid,
-                                           fields=fields,
-                                           geometry=geometry_type)
+            iftrue = _create_feature_class(
+                con=self._con,
+                name=name,
+                wkid=wkid,
+                fields=fields,
+                geometry=geometry_type,
+            )
             if iftrue:
-                return SpatialTable(table=name,
-                                    con=self._con)
+                return SpatialTable(table=name, con=self._con)
 
         else:
-            iftrue = _create_table(con=self._con,
-                                 name=name,
-                                 fields=fields)
+            iftrue = _create_table(con=self._con, name=name, fields=fields)
             if iftrue:
                 return Table(table=name, con=self._con)
 
         return
+
+
 ########################################################################
 class _Row(MutableMapping, OrderedDict):
     """
@@ -239,79 +267,89 @@ class _Row(MutableMapping, OrderedDict):
 
     ** It should not be created by a user. **
     """
+
     _con = None
     _values = None
     _table_name = None
     _dict = None
     _keys = None
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     def __init__(self, values, table_name=None, con=None, header=None):
         """Constructor"""
         self._table_name = table_name
         self._con = con
         self._values = values
         self._header = header
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __str__(self):
-        return "<Row OBJECTID=%s>" % self['OBJECTID']
-    #----------------------------------------------------------------------
+        return "<Row OBJECTID=%s>" % self["OBJECTID"]
+
+    # ----------------------------------------------------------------------
     def __repr__(self):
         return self.__str__()
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __setattr__(self, name, value):
-        if name in {'_values','_dict', '_table_name', '_con', '_keys', '_header'}:
+        if name in {"_values", "_dict", "_table_name", "_con", "_keys", "_header"}:
             super().__setattr__(name, value)
-        elif name.lower() == 'shape':
+        elif name.lower() == "shape":
             self._values[name] = value
             self._update()
-        elif name.lower() != 'objectid' and \
-             name in self.keys():
+        elif name.lower() != "objectid" and name in self.keys():
             self._values[name] = value
             self._update()
 
-        elif name.lower() == 'objectid':
+        elif name.lower() == "objectid":
             raise ValueError("OBJECTID values cannot be updated.")
         else:
             raise ValueError("The field: {field} does not exist.".format(field=name))
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __getattr__(self, name):
         if name in self._values:
             return self._values[name]
         return
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __getitem__(self, name):
         return self.__getattr__(name)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __setitem__(self, name, value):
         self.__setattr__(name, value)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def keys(self):
         """returns the column names in the dataset"""
         return list(self._values.keys())
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def fields(self):
         """returns the field names in the dataset"""
         return self.keys()
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def as_dict(self):
         """returns the row as a dictionary"""
         return dict(zip(self.keys(), self.values()))
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def values(self):
         """returns the row values"""
         return list(self._values.values())
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def _update(self):
         """updates the current row"""
         txts = []
         values = []
-        for k,v in self._values.items():
-            if k.lower() != "objectid" and \
-               k.lower() != 'shape':
+        for k, v in self._values.items():
+            if k.lower() != "objectid" and k.lower() != "shape":
                 txts.append("%s=?" % k)
                 values.append(v)
-            elif k.lower() == 'shape':
+            elif k.lower() == "shape":
                 if isinstance(v, dict) and "coordinates" not in v:
                     v = self._header + dumps(v, False)
                 elif isinstance(v, dict) and "coordinates" in v:
@@ -322,26 +360,29 @@ class _Row(MutableMapping, OrderedDict):
                 elif isinstance(v, (bytes, bytearray)):
                     if isinstance(v, (bytearray)):
                         v = bytes(v)
-                    if len(v) > 2 and \
-                       v[:2] != b'GB':
+                    if len(v) > 2 and v[:2] != b"GB":
                         v = self._gpheader + v
                 elif v is None:
-                    v = self._gpheader + b'0x000000000000f87f'
+                    v = self._gpheader + b"0x000000000000f87f"
                 else:
-                    raise ValueError(("Shape column must be Esri JSON dictionary, "
-                                      "WKT, GeoJSON dictionary, or WKB (bytes)"))
+                    raise ValueError(
+                        (
+                            "Shape column must be Esri JSON dictionary, "
+                            "WKT, GeoJSON dictionary, or WKB (bytes)"
+                        )
+                    )
                 txts.append("%s=?" % k)
                 values.append(v)
-        sql = '''UPDATE {table} SET {values} WHERE OBJECTID={oid}'''.format(
-            table=self._table_name,
-            values=",".join(txts),
-            oid=self._values['OBJECTID'])
+        sql = """UPDATE {table} SET {values} WHERE OBJECTID={oid}""".format(
+            table=self._table_name, values=",".join(txts), oid=self._values["OBJECTID"]
+        )
         cur = self._con.execute(sql, values)
         self._con.commit()
         del sql
         del values, txts
         return True
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def delete(self):
         """
         Deletes the current row
@@ -350,11 +391,14 @@ class _Row(MutableMapping, OrderedDict):
         """
         try:
             cur = self._con.execute(
-                '''DELETE FROM {tbl} WHERE OBJECTID=?'''.format(tbl=self._table_name),
-                [self['OBJECTID']])
+                """DELETE FROM {tbl} WHERE OBJECTID=?""".format(tbl=self._table_name),
+                [self["OBJECTID"]],
+            )
             return True
         except:
             return False
+
+
 ########################################################################
 class Table(object):
     """
@@ -377,27 +421,32 @@ class Table(object):
     _table_name = None
     _create_sql = None
     _fields = None
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     def __init__(self, table, con):
         """Constructor"""
         self._con = con
         self._table_name = table
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def dtype(self):
         """returns the table type"""
         return "attribute"
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __str__(self):
         return "<Attribute Table: {table}>".format(table=self._table_name)
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __repr__(self):
         return self.__str__()
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __iter__(self):
         for row in self.rows():
             yield row
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def fields(self):
         """
@@ -411,7 +460,8 @@ class Table(object):
             rows = self._con.execute(sql).fetchall()
             self._fields = {row[1]: row[2] for row in rows}
         return self._fields
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def add_field(self, name, data_type):
         """
 
@@ -440,34 +490,62 @@ class Table(object):
 
         """
         _field_lookup = {
-            "text" : ["TEXT", "check((typeof({field}) = 'text' or typeof({field}) = 'null') and not length({field}) > {l})"],
-            "float" : ["DOUBLE", """check(typeof({field}) = 'real' or typeof({field}) = 'null')"""],
-            "double" : ["DOUBLE", "check(typeof({field}) = 'real' or typeof({field}) = 'null')"],
-            "short" : ["SMALLINT", "check((typeof({field}) = 'integer' or typeof({field}) = 'null') and {field} >= -32768 and {field} <= 32767)"],
-            "long" : ["MEDIUMINT", "check((typeof({field}) = 'integer' or typeof({field}) = 'null') and {field} >= -2147483648 and {field} <= 2147483647)"],
-            "integer" : ["MEDIUMINT", "check((typeof({field}) = 'integer' or typeof({field}) = 'null') and {field} >= -2147483648 and {field} <= 2147483647)"],
-            "date" : ["DATETIME", "check((typeof({field}) = 'text' or typeof({field}) = 'null') and strftime('%Y-%m-%dT%H:%M:%fZ',{field}))"],
-            "blob" : ["BLOB", "check(typeof({field}) = 'blob' or typeof({field}) = 'null')"],
-            "guid" : ["TEXT(38)", "check((typeof({field}) = 'text' or typeof({field}) = 'null') and not length({field}) > 38)"]
+            "text": [
+                "TEXT",
+                "check((typeof({field}) = 'text' or typeof({field}) = 'null') and not length({field}) > {l})",
+            ],
+            "float": [
+                "DOUBLE",
+                """check(typeof({field}) = 'real' or typeof({field}) = 'null')""",
+            ],
+            "double": [
+                "DOUBLE",
+                "check(typeof({field}) = 'real' or typeof({field}) = 'null')",
+            ],
+            "short": [
+                "SMALLINT",
+                "check((typeof({field}) = 'integer' or typeof({field}) = 'null') and {field} >= -32768 and {field} <= 32767)",
+            ],
+            "long": [
+                "MEDIUMINT",
+                "check((typeof({field}) = 'integer' or typeof({field}) = 'null') and {field} >= -2147483648 and {field} <= 2147483647)",
+            ],
+            "integer": [
+                "MEDIUMINT",
+                "check((typeof({field}) = 'integer' or typeof({field}) = 'null') and {field} >= -2147483648 and {field} <= 2147483647)",
+            ],
+            "date": [
+                "DATETIME",
+                "check((typeof({field}) = 'text' or typeof({field}) = 'null') and strftime('%Y-%m-%dT%H:%M:%fZ',{field}))",
+            ],
+            "blob": [
+                "BLOB",
+                "check(typeof({field}) = 'blob' or typeof({field}) = 'null')",
+            ],
+            "guid": [
+                "TEXT(38)",
+                "check((typeof({field}) = 'text' or typeof({field}) = 'null') and not length({field}) > 38)",
+            ],
         }
         try:
             row = _field_lookup[data_type.lower()]
             if row[0].lower() != "text":
-                fld = ("{field} {dtype} {st}"
-                       .format(field=name, dtype=row[0], st=row[1])
-                       .format(field=name))
+                fld = "{field} {dtype} {st}".format(
+                    field=name, dtype=row[0], st=row[1]
+                ).format(field=name)
             else:
                 fld = "{field} {dtype}".format(field=name, dtype=row[0])
-            sql = """ALTER TABLE {table} ADD COLUMN {dtype};""".format(table=self._table_name,
-                                                                          field=name,
-                                                                          dtype=fld)
+            sql = """ALTER TABLE {table} ADD COLUMN {dtype};""".format(
+                table=self._table_name, field=name, dtype=fld
+            )
             self._con.execute(sql)
             self._con.commit()
             self._fields = None
             return True
         except:
             return False
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def delete_field(self, name):
         """
         Drops a Field from a Table
@@ -485,12 +563,15 @@ class Table(object):
         CREATE TABLE temp_bkup AS SELECT {fields} FROM {table};
         DROP TABLE {table};
         ALTER TABLE temp_bkup RENAME TO {table};
-        """.format(table=self._table_name, fields=fields)
+        """.format(
+            table=self._table_name, fields=fields
+        )
         self._con.executescript(sql)
         self._con.commit()
         self._fields = None
         return True
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def rows(self, where=None, fields="*"):
         """
         Search/update cursor like iterator
@@ -512,20 +593,24 @@ class Table(object):
                 fields.append("OBJECTID")
             fields = ",".join(fields)
         if where is None:
-            query = """SELECT {fields} from {tbl} """.format(tbl=self._table_name,
-                                                             fields=fields)
+            query = """SELECT {fields} from {tbl} """.format(
+                tbl=self._table_name, fields=fields
+            )
         else:
-            query = """SELECT {fields} from {tbl} WHERE {where}""".format(tbl=self._table_name,
-                                                                          fields=fields,
-                                                                          where=where)
+            query = """SELECT {fields} from {tbl} WHERE {where}""".format(
+                tbl=self._table_name, fields=fields, where=where
+            )
         cursor = self._con.cursor()
         c = cursor.execute(query)
         columns = [d[0] for d in c.description]
         for row in c:
-            yield _Row(values=dict(zip(columns, row)),
-                       table_name=self._table_name,
-                       con=self._con)
-    #----------------------------------------------------------------------
+            yield _Row(
+                values=dict(zip(columns, row)),
+                table_name=self._table_name,
+                con=self._con,
+            )
+
+    # ----------------------------------------------------------------------
     def insert(self, row):
         """
         Inserts a new row via dictionary
@@ -550,16 +635,17 @@ class Table(object):
             values = [list(r.values()) for r in row]
         q = ["?"] * len(keys)
         q = ",".join(q)
-        sql = '''INSERT INTO {table} ({fields})
-                     VALUES({q})'''.format(table=self._table_name,
-                                           fields=",".join(keys),
-                                           q=q)
+        sql = """INSERT INTO {table} ({fields})
+                     VALUES({q})""".format(
+            table=self._table_name, fields=",".join(keys), q=q
+        )
         inserts = []
         cur = self._con.cursor()
         cur.execute(sql, list(values[0]))
         self._con.commit()
         return True
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def to_pandas(self, where=None, fields="*", ftype=None):
         """
         Exports a table to a Pandas' DataFrame.
@@ -585,26 +671,27 @@ class Table(object):
 
         """
         import pandas as pd
+
         if isinstance(fields, (list, tuple)):
             if "OBJECTID" not in fields:
                 fields.append("OBJECTID")
             fields = ",".join(fields)
         if where is None:
-            query = """SELECT {fields} from {tbl} """.format(tbl=self._table_name,
-                                                             fields=fields)
+            query = """SELECT {fields} from {tbl} """.format(
+                tbl=self._table_name, fields=fields
+            )
         else:
-            query = """SELECT {fields} from {tbl} WHERE {where}""".format(tbl=self._table_name,
-                                                                          fields=fields,
-                                                                          where=where)
+            query = """SELECT {fields} from {tbl} WHERE {where}""".format(
+                tbl=self._table_name, fields=fields, where=where
+            )
         if ftype is None:
-            return pd.read_sql_query(query,
-                                     self._con)
-        elif str(ftype).lower() == 'esri':
+            return pd.read_sql_query(query, self._con)
+        elif str(ftype).lower() == "esri":
             try:
                 from arcgis.geometry import Geometry
                 from arcgis.features import GeoAccessor, GeoSeriesAccessor
-                df = pd.read_sql_query(query,
-                                       self._con)
+
+                df = pd.read_sql_query(query, self._con)
                 fields = list(self.fields.keys())
                 lower_fields = [str(fld).lower() for fld in fields]
                 if "shape" in lower_fields:
@@ -615,18 +702,23 @@ class Table(object):
                     try:
                         df.spatial.project(self.wkid)
                     except:
-                        print('nope')
+                        print("nope")
                 return df
             except ImportError:
-                raise Exception("The Python API for ArcGIS is required to import using ftype `esri`")
+                raise Exception(
+                    "The Python API for ArcGIS is required to import using ftype `esri`"
+                )
             except Exception as e:
                 raise Exception(e)
+
+
 ########################################################################
 class SpatialTable(Table):
     """
     Represents a Feature Class inside a GeoPackage
 
     """
+
     _con = None
     _wkid = None
     _gtype = None
@@ -634,16 +726,20 @@ class SpatialTable(Table):
     _table_name = None
     _create_sql = None
     _gp_header = None
-    #----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     def __init__(self, table, con):
         """Constructor"""
         self._table_name = table
         self._con = con
         self._refresh()
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def _refresh(self):
         """internal method that refreshes the table information"""
-        self._sd_lu = """SELECT * from gpkg_geometry_columns where table_name = '%s'""" % self._table_name
+        self._sd_lu = (
+            """SELECT * from gpkg_geometry_columns where table_name = '%s'"""
+            % self._table_name
+        )
         cur = self._con.execute(self._sd_lu)
         self._gp_header = None
 
@@ -652,20 +748,25 @@ class SpatialTable(Table):
             self._wkid = row[3]
             break
         del cur
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def __str__(self):
-        return "<Spatial Table: {table}, {gt}>".format(table=self._table_name,
-                                                       gt=self._gtype)
-    #----------------------------------------------------------------------
+        return "<Spatial Table: {table}, {gt}>".format(
+            table=self._table_name, gt=self._gtype
+        )
+
+    # ----------------------------------------------------------------------
     def __repr__(self):
         return self.__str__()
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def geometry_type(self):
         if self._gtype is None:
             self._refresh()
         return self._gtype
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def dtype(self):
         """
@@ -675,7 +776,8 @@ class SpatialTable(Table):
 
         """
         return "spatial"
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     @property
     def wkid(self):
         """
@@ -686,7 +788,8 @@ class SpatialTable(Table):
         if self._wkid is None:
             self._refresh()
         return self._wkid
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def rows(self, where=None, fields="*"):
         """
         Search/update cursor like iterator
@@ -708,42 +811,54 @@ class SpatialTable(Table):
                 fields.append("OBJECTID")
             fields = ",".join(fields)
         if where is None:
-            query = """SELECT {fields} from {tbl} """.format(tbl=self._table_name,
-                                                             fields=fields)
+            query = """SELECT {fields} from {tbl} """.format(
+                tbl=self._table_name, fields=fields
+            )
         else:
-            query = """SELECT {fields} from {tbl} WHERE {where}""".format(tbl=self._table_name,
-                                                                          fields=fields,
-                                                                          where=where)
+            query = """SELECT {fields} from {tbl} WHERE {where}""".format(
+                tbl=self._table_name, fields=fields, where=where
+            )
         cursor = self._con.cursor()
         c = cursor.execute(query)
         columns = [d[0] for d in c.description]
         for row in c:
-            yield _Row(values=dict(zip(columns, row)),
-                       table_name=self._table_name,
-                       con=self._con, header=self._gpheader)
-    #----------------------------------------------------------------------
+            yield _Row(
+                values=dict(zip(columns, row)),
+                table_name=self._table_name,
+                con=self._con,
+                header=self._gpheader,
+            )
+
+    # ----------------------------------------------------------------------
     def _flag_to_bytes(self, code):
         """converts single integer to bytes"""
-        return int(code).to_bytes(1,
-                                  byteorder='little')
-    #----------------------------------------------------------------------
+        return int(code).to_bytes(1, byteorder="little")
+
+    # ----------------------------------------------------------------------
     def _srid_to_bytes(self, srid):
         """converst WKID values to bytes"""
-        return int(srid).to_bytes(4,
-                                  byteorder='little')
-    #----------------------------------------------------------------------
+        return int(srid).to_bytes(4, byteorder="little")
+
+    # ----------------------------------------------------------------------
     def _build_gp_header(self, version=0, empty=1):
         """assembles the GP header for WKB geometry"""
-        return b'GP' + self._flag_to_bytes(version) + self._flag_to_bytes(empty) + self._srid_to_bytes(self.wkid)
-    #----------------------------------------------------------------------
+        return (
+            b"GP"
+            + self._flag_to_bytes(version)
+            + self._flag_to_bytes(empty)
+            + self._srid_to_bytes(self.wkid)
+        )
+
+    # ----------------------------------------------------------------------
     @property
     def _gpheader(self):
         """internal only, builds the geopackage binary header"""
         if self._gp_header is None:
             self._gp_header = self._build_gp_header()
         return self._gp_header
-    #----------------------------------------------------------------------
-    def insert(self, row, geom_format='EsriJSON'):
+
+    # ----------------------------------------------------------------------
+    def insert(self, row, geom_format="EsriJSON"):
         """
         Inserts a new row via dictionary
 
@@ -772,32 +887,47 @@ class SpatialTable(Table):
         :returns: Boolean
 
         """
-        if _HASGEOMET == False and geom_format.lower() in ['wkt', 'geojson']:
-            raise ValueError(("The package `geomet` is required to work with "
-                              "WKT and GeoJSON. Run `pip install geomet` to install."))
+        if _HASGEOMET == False and geom_format.lower() in ["wkt", "geojson"]:
+            raise ValueError(
+                (
+                    "The package `geomet` is required to work with "
+                    "WKT and GeoJSON. Run `pip install geomet` to install."
+                )
+            )
         if isinstance(row, _Row):
             row = row._values
         values = None
         flds = {fld.lower(): fld for fld in row.keys()}
-        if 'shape' in flds:
-            if isinstance(row[flds['shape']], dict) and geom_format.lower() == "esrijson":
-                row[flds['shape']] = self._gpheader + dumps(row[flds['shape']], False)
-            elif isinstance(row[flds['shape']], dict) and geom_format.lower() == "geojson":
-                row[flds['shape']] = self._gpheader + geometwkb.dumps(obj=row[flds['shape']])
-            elif isinstance(row[flds['shape']], str) and geom_format.lower() == "wkt":
-                gj = geometwkt.loads(row[flds['shape']])
-                row[flds['shape']] = self._gpheader + geometwkb.dumps(obj=gj)
-            elif isinstance(row[flds['shape']], (bytes, bytearray)):
-                if isinstance(row[flds['shape']], (bytearray)):
-                    row[flds['shape']] = bytes(row[flds['shape']])
-                if len(row[flds['shape']]) > 2 and \
-                   row[flds['shape']][:2] != b'GB':
-                    row[flds['shape']] = self._gpheader + row[flds['shape']]
-            elif row[flds['shape']] is None:
-                row[flds['shape']] = self._gpheader + b'0x000000000000f87f'
+        if "shape" in flds:
+            if (
+                isinstance(row[flds["shape"]], dict)
+                and geom_format.lower() == "esrijson"
+            ):
+                row[flds["shape"]] = self._gpheader + dumps(row[flds["shape"]], False)
+            elif (
+                isinstance(row[flds["shape"]], dict)
+                and geom_format.lower() == "geojson"
+            ):
+                row[flds["shape"]] = self._gpheader + geometwkb.dumps(
+                    obj=row[flds["shape"]]
+                )
+            elif isinstance(row[flds["shape"]], str) and geom_format.lower() == "wkt":
+                gj = geometwkt.loads(row[flds["shape"]])
+                row[flds["shape"]] = self._gpheader + geometwkb.dumps(obj=gj)
+            elif isinstance(row[flds["shape"]], (bytes, bytearray)):
+                if isinstance(row[flds["shape"]], (bytearray)):
+                    row[flds["shape"]] = bytes(row[flds["shape"]])
+                if len(row[flds["shape"]]) > 2 and row[flds["shape"]][:2] != b"GB":
+                    row[flds["shape"]] = self._gpheader + row[flds["shape"]]
+            elif row[flds["shape"]] is None:
+                row[flds["shape"]] = self._gpheader + b"0x000000000000f87f"
             else:
-                raise ValueError(("Shape column must be Esri JSON dictionary, "
-                                  "WKT, GeoJSON dictionary, or WKB (bytes)"))
+                raise ValueError(
+                    (
+                        "Shape column must be Esri JSON dictionary, "
+                        "WKT, GeoJSON dictionary, or WKB (bytes)"
+                    )
+                )
         if isinstance(row, dict):
             keys = row.keys()
             values = [list(row.values())]
@@ -806,13 +936,12 @@ class SpatialTable(Table):
             values = [list(r.values()) for r in row]
         q = ["?"] * len(keys)
         q = ",".join(q)
-        sql = '''INSERT INTO {table} ({fields})
-                     VALUES({q})'''.format(table=self._table_name,
-                                           fields=",".join(keys),
-                                           q=q)
+        sql = """INSERT INTO {table} ({fields})
+                     VALUES({q})""".format(
+            table=self._table_name, fields=",".join(keys), q=q
+        )
         inserts = []
         cur = self._con.cursor()
         cur.execute(sql, list(values[0]))
         self._con.commit()
         return True
-

@@ -7,22 +7,24 @@ import os
 import json
 import pandas as pd
 
-__all__ = ['lookup_coordinate_system', 'info']
-#----------------------------------------------------------------------
+__all__ = ["lookup_coordinate_system", "info"]
+# ----------------------------------------------------------------------
 _lutbl = None
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 def _load_data():
     """loads the coordinate information into memory"""
 
     _fp = r"%s\prj.json" % os.path.dirname(__file__)
     global _lutbl
     if _lutbl is None:
-        with open(_fp, 'r') as reader:
+        with open(_fp, "r") as reader:
             _lutbl = pd.DataFrame(json.loads(reader.read()))
-            _lutbl.columns = ['WKID', 'NAME', 'WKT']
+            _lutbl.columns = ["WKID", "NAME", "WKT"]
             del reader
     return _lutbl
-#----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
 def lookup_coordinate_system(wkid):
     """
     Looks up the wkt and name of the wkid coordinate system
@@ -51,15 +53,17 @@ def lookup_coordinate_system(wkid):
     if _lutbl is None:
         _load_data()
     if isinstance(wkid, (int, float)):
-        q = _lutbl['WKID'] == int(wkid)
+        q = _lutbl["WKID"] == int(wkid)
     elif isinstance(wkid, (list, tuple)):
-        q = _lutbl['WKID'].isin(wkid)
+        q = _lutbl["WKID"].isin(wkid)
     else:
         raise ValueError("Invalid wkid. Must be int or list.")
     if len(_lutbl[q]) == 0:
         raise ValueError("Invalid WKID")
-    return _lutbl[q].to_dict('records')
-#----------------------------------------------------------------------
+    return _lutbl[q].to_dict("records")
+
+
+# ----------------------------------------------------------------------
 def info():
     """Returns all the support projections
 
