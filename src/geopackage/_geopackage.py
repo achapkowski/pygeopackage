@@ -2,7 +2,8 @@ import os
 import sys
 import json
 import sqlite3
-
+from typing import Generator
+from typing import Union, Any, Dict
 import tempfile
 from io import BytesIO, StringIO
 from sqlite3 import Binary as sBinary
@@ -105,7 +106,7 @@ class GeoPackage(object):
             return 0
 
     # ----------------------------------------------------------------------
-    def __enter__(self):
+    def __enter__(self) -> "GeoPackage":
         if self._con is None:
             self._con = sqlite3.connect(self._path)
         return self
@@ -116,7 +117,7 @@ class GeoPackage(object):
         self._con.close()
 
     # ----------------------------------------------------------------------
-    def exists(self, name):
+    def exists(self, name: str) -> bool:
         """
         Returns boolean if the table exists
 
@@ -131,7 +132,7 @@ class GeoPackage(object):
         return False
 
     # ----------------------------------------------------------------------
-    def get(self, name):
+    def get(self, name: str) -> Union["Table", "SpatialTable"]:
         """
         Returns a table if it exists in the geopackage.
 
@@ -155,7 +156,7 @@ class GeoPackage(object):
 
     # ----------------------------------------------------------------------
     @property
-    def tables(self):
+    def tables(self) -> Generator["Table", "SpatialTable"]:
         """
         Gets a list of registered table names with the geopackage
 
@@ -171,7 +172,7 @@ class GeoPackage(object):
                 yield SpatialTable(tbl[0], self._con)
 
     # ----------------------------------------------------------------------
-    def enable(self):
+    def enable(self) -> bool:
         """
         enables the sqlite database to be a geopackage
 
@@ -185,7 +186,14 @@ class GeoPackage(object):
         return True
 
     # ----------------------------------------------------------------------
-    def create(self, name, fields=None, wkid=None, geometry_type=None, overwrite=True):
+    def create(
+        self,
+        name: str,
+        fields: Dict[str, str] = None,
+        wkid: int = None,
+        geometry_type: str = None,
+        overwrite: bool = True,
+    ) -> Union["Table", "SpatialTable"]:
         """
         The `create` method generates a new table or feature class in the
         geopackage.

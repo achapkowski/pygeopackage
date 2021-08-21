@@ -74,7 +74,7 @@ setup(
     ],
     include_package_data=True,
     zip_safe=False,
-    install_requires=["pandas"],
+    install_requires=["pandas", "geomet"],
     extras_require={},
     package_data={"geopackage": ["prj.json"]},
 )
